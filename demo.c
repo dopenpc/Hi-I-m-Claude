@@ -660,8 +660,10 @@ static void write_wav(const char *path) {
 }
 
 // ---------- main ----------
+static const char *EXPORT_PATH = NULL; // --export: render to an MP4 with ffmpeg instead of playing
+
 static void usage(const char *p) {
-    fprintf(stderr, "Usage: %s [--lang en|it|fr|es]   (default: en)\n", p);
+    fprintf(stderr, "Usage: %s [--lang en|it|fr|es] [--export out.mp4]   (default language: en)\n", p);
 }
 
 int main(int argc, char **argv) {
@@ -670,6 +672,7 @@ int main(int argc, char **argv) {
         if (!strcmp(a, "-h") || !strcmp(a, "--help")) { usage(argv[0]); return 0; }
         if (!strncmp(a, "--lang=", 7)) v = a + 7;
         else if (!strcmp(a, "--lang") || !strcmp(a, "-l")) v = i + 1 < argc ? argv[++i] : "";
+        else if (!strcmp(a, "--export")) { EXPORT_PATH = i + 1 < argc ? argv[++i] : NULL; if (!EXPORT_PATH) { usage(argv[0]); return 1; } continue; }
         else v = a; // bare language code
         int ok = 0;
         for (int l = 0; l < 4; l++) if (!strcmp(v, LANG_NAME[l])) { LANG = l; ok = 1; }
@@ -693,6 +696,34 @@ int main(int argc, char **argv) {
     Texture2D fbt = LoadTextureFromImage(img);
     UnloadImage(img);
     SetTextureFilter(fbt, TEXTURE_FILTER_POINT);
+
+    if (EXPORT_PATH) { // offline render: 60 fps frames + soundtrack -> MP4 (needs ffmpeg in PATH)
+        char wav[600], cmd[2048];
+        snprintf(wav, sizeof wav, "%s.tmp.wav", EXPORT_PATH);
+        if (system("command -v ffmpeg >/dev/null 2>&1") != 0) { fprintf(stderr, "ffmpeg not found (brew install ffmpeg)\n"); CloseWindow(); return 1; }
+        write_wav(wav);
+        snprintf(cmd, sizeof cmd,
+                 "ffmpeg -y -loglevel error -f rawvideo -pix_fmt rgba -s %dx%d -r 60 -i - -i '%s' "
+                 "-vf 'scale=1600:1000:flags=neighbor,pad=1920:1080:160:40:black' "
+                 "-c:v libx264 -preset slow -crf 14 -pix_fmt yuv420p -c:a aac -b:a 192k -shortest -movflags +faststart '%s'",
+                 W, H, wav, EXPORT_PATH);
+        FILE *ff = popen(cmd, "w");
+        if (!ff) { fprintf(stderr, "cannot start ffmpeg\n"); CloseWindow(); return 1; }
+        int frames = (int)(DURATION * 60);
+        for (int f = 0; f < frames; f++) {
+            render_frame(f / 60.0f, rt, fbt);
+            Image im = LoadImageFromTexture(rt.texture);
+            ImageFlipVertical(&im);
+            fwrite(im.data, 1, (size_t)W * H * 4, ff);
+            UnloadImage(im);
+            if (f % 600 == 0) fprintf(stderr, "export: %d%%\n", f * 100 / frames);
+        }
+        pclose(ff);
+        remove(wav);
+        fprintf(stderr, "export: done -> %s\n", EXPORT_PATH);
+        CloseWindow();
+        return 0;
+    }
 
     if (getenv("SNAP")) { // screenshots at given times
         const char *dir = getenv("SNAPDIR") ? getenv("SNAPDIR") : ".";
