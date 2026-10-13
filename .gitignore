@@ -4,3 +4,4 @@ vendor/
 *.wav
 snap_*.png
 .DS_Store
+*.mp4

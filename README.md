@@ -90,6 +90,10 @@ Each scene lasts a whole number of bars (128 bpm, 1 bar = 1.875 s), and the musi
 
 The thoughts (28 lines, typed out in a dialogue box with a little blip per letter) are translated in all four languages.
 
+## License
+
+The source code of this project is released under the [MIT License](LICENSE).
+
 ## Disclaimer and trademarks
 
 This is an independent, non-commercial hobby project. It is **not affiliated with, endorsed by, or sponsored by Anthropic**
