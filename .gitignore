@@ -1,0 +1,6 @@
+demo
+vendor/
+*.log
+*.wav
+snap_*.png
+.DS_Store
