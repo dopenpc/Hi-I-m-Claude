@@ -27,6 +27,9 @@ static uint8_t fb[H][W];
 static uint32_t pix[W * H];
 
 // ---------- structure: 7 scenes, each a whole number of bars (1 bar = 1.875 s) ----------
+static const char *THUMB_PREFIX = NULL; // --thumb: write 1280x720 YouTube thumbnails
+static int g_no_overlay = 0;         // thumbnails: scene without text overlay
+
 static const float SEC_T[8] = {0, 15, 30, 48.75f, 67.5f, 86.25f, 105, 120};
 static int sec_of(float t) { int i = 0; while (i < 6 && t >= SEC_T[i + 1]) i++; return i; }
 
@@ -629,7 +632,7 @@ static void render_frame(float t, RenderTexture2D rt, Texture2D fbt) {
     BeginTextureMode(rt);
     ClearBackground(BLACK);
     DrawTexture(fbt, 0, 0, WHITE);
-    overlay(t, sec, lt);
+    if (!g_no_overlay) overlay(t, sec, lt);
     EndTextureMode();
 }
 
@@ -663,7 +666,7 @@ static void write_wav(const char *path) {
 static const char *EXPORT_PATH = NULL; // --export: render to an MP4 with ffmpeg instead of playing
 
 static void usage(const char *p) {
-    fprintf(stderr, "Usage: %s [--lang en|it|fr|es] [--export out.mp4]   (default language: en)\n", p);
+    fprintf(stderr, "Usage: %s [--lang en|it|fr|es] [--export out.mp4] [--thumb prefix]   (default language: en)\n", p);
 }
 
 int main(int argc, char **argv) {
@@ -673,6 +676,7 @@ int main(int argc, char **argv) {
         if (!strncmp(a, "--lang=", 7)) v = a + 7;
         else if (!strcmp(a, "--lang") || !strcmp(a, "-l")) v = i + 1 < argc ? argv[++i] : "";
         else if (!strcmp(a, "--export")) { EXPORT_PATH = i + 1 < argc ? argv[++i] : NULL; if (!EXPORT_PATH) { usage(argv[0]); return 1; } continue; }
+        else if (!strcmp(a, "--thumb")) { THUMB_PREFIX = i + 1 < argc ? argv[++i] : NULL; if (!THUMB_PREFIX) { usage(argv[0]); return 1; } continue; }
         else v = a; // bare language code
         int ok = 0;
         for (int l = 0; l < 4; l++) if (!strcmp(v, LANG_NAME[l])) { LANG = l; ok = 1; }
@@ -696,6 +700,39 @@ int main(int argc, char **argv) {
     Texture2D fbt = LoadTextureFromImage(img);
     UnloadImage(img);
     SetTextureFilter(fbt, TEXTURE_FILTER_POINT);
+
+    if (THUMB_PREFIX) { // two 1280x720 thumbnails: a = awakening, b = connection
+        RenderTexture2D cv = LoadRenderTexture(1280, 720);
+        SetTextureFilter(cv.texture, TEXTURE_FILTER_POINT);
+        SetTextureFilter(font.texture, TEXTURE_FILTER_POINT);
+        static const float TT[2] = {13.5f, 97.0f};
+        static const Rectangle SRC[2] = {{60, 0, 200, 112.5f}, {20, 38, 200, 112.5f}};
+        for (int v = 0; v < 2; v++) {
+            g_no_overlay = 1;
+            render_frame(TT[v], rt, fbt);
+            BeginTextureMode(cv);
+            ClearBackground(BLACK);
+            Rectangle src = {SRC[v].x, H - SRC[v].y - SRC[v].height, SRC[v].width, -SRC[v].height};
+            DrawTexturePro(rt.texture, src, (Rectangle){0, 0, 1280, 720}, (Vector2){0, 0}, 0, WHITE);
+            DrawRectangle(0, 0, 1280, 330, Fade(BLACK, 0.55f));
+            const char *t1 = UI[LANG][U_TITLE], *t2 = UI[LANG][U_SUB];
+            Vector2 m1 = MeasureTextEx(font, t1, 150, 6), m2 = MeasureTextEx(font, t2, 70, 4);
+            DrawTextEx(font, t1, (Vector2){(1280 - m1.x) / 2 + 8, 36 + 8}, 150, 6, BLACK);
+            DrawTextEx(font, t1, (Vector2){(1280 - m1.x) / 2, 36}, 150, 6, PAL[YL]);
+            DrawTextEx(font, t2, (Vector2){(1280 - m2.x) / 2 + 5, 210 + 5}, 70, 4, BLACK);
+            DrawTextEx(font, t2, (Vector2){(1280 - m2.x) / 2, 210}, 70, 4, PAL[LB]);
+            DrawRectangle(1090, 640, 170, 60, Fade(BLACK, 0.85f));
+            DrawTextEx(font, "2:00", (Vector2){1112, 646}, 48, 4, WHITE);
+            EndTextureMode();
+            Image im = LoadImageFromTexture(cv.texture);
+            ImageFlipVertical(&im);
+            char p[600]; snprintf(p, sizeof p, "%s-%c.png", THUMB_PREFIX, 'a' + v);
+            ExportImage(im, p);
+            UnloadImage(im);
+        }
+        CloseWindow();
+        return 0;
+    }
 
     if (EXPORT_PATH) { // offline render: 60 fps frames + soundtrack -> MP4 (needs ffmpeg in PATH)
         char wav[600], cmd[2048];

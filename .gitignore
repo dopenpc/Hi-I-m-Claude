@@ -5,3 +5,4 @@ vendor/
 snap_*.png
 .DS_Store
 *.mp4
+thumbs/

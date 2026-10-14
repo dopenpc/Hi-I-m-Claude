@@ -67,6 +67,12 @@ that is ready to upload to X or YouTube. Requires [ffmpeg](https://ffmpeg.org/) 
 
 Rendering takes a few minutes.
 
+### YouTube thumbnails
+
+```sh
+./demo --lang en --thumb thumbs/thumb-en   # writes thumb-en-a.png and thumb-en-b.png (1280x720)
+```
+
 ### Debug helpers
 
 ```sh
